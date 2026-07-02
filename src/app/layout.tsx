@@ -1,57 +1,45 @@
-import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
-import './globals.css';
+// FILE: src/app/layout.tsx
+'use client';
 
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-});
+import { Inter } from 'next/font/google';
+import { StoreProvider, useStore } from '@/lib/store';
+import '@/app/globals.css';
 
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-jetbrains-mono',
-});
+const inter = Inter({ subsets: ['latin'] });
 
-export const metadata: Metadata = {
-  title: 'SLATracker — Monitor & Enforce SLAs',
-  description: 'Automated breach detection, compliance reporting, and real-time status dashboards for internal IT and customer-facing SLAs.',
-};
+function Toast() {
+  const { state, dispatch } = useStore();
+  if (!state.toasts.length) return null;
+  const t = state.toasts[0];
+  return (
+    <div className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-md border border-[rgba(255,255,255,0.08)] bg-[#191a1b] px-4 py-3 text-sm text-[#f7f8f8] shadow-lg">
+      <span>{t.message}</span>
+      <button
+        onClick={() => dispatch({ type: 'DISMISS_TOAST', payload: t.id })}
+        className="text-[#8a8f98] hover:text-[#f7f8f8]"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  try {
-    return (
-      <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-        <head>
-          <script dangerouslySetInnerHTML={{ __html: `
-            try {
-              if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark')
-              } else {
-                document.documentElement.classList.remove('dark')
-              }
-            } catch (e) {}
-          ` }} />
-        </head>
-        <body className="font-sans antialiased bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+  return (
+    <html lang="en" className="dark">
+      <head>
+        <title>SLATracker</title>
+      </head>
+      <body className={`${inter.className} min-h-screen bg-[#08090a] text-[#f7f8f8] antialiased`}>
+        <StoreProvider>
           {children}
-        </body>
-      </html>
-    );
-  } catch (error) {
-    console.error('Layout error:', error);
-    return (
-      <html lang="en">
-        <body className="bg-slate-50 text-slate-900">
-          <div className="p-8 text-center">
-            <h1 className="text-2xl font-bold text-red-500">Application Error</h1>
-            <p className="mt-2 text-slate-600">Failed to load application layout.</p>
-          </div>
-        </body>
-      </html>
-    );
-  }
+          <Toast />
+        </StoreProvider>
+      </body>
+    </html>
+  );
 }

@@ -10,65 +10,71 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Linear Dark Premium palette (hardcoded hex tokens)
         brand: {
-          50: "#eff6ff",
-          100: "#dbeafe",
-          200: "#bfdbfe",
-          300: "#93c5fd",
-          400: "#60a5fa",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
-          800: "#1e40af",
-          900: "#1e3a8a",
-          950: "#172554",
+          DEFAULT: "#5e6ad2",
+          hover: "#7170ff",
+          light: "#828fff",
+        },
+        surface: {
+          black: "#08090a",
+          panel: "#0f1011",
+          elevated: "#191a1b",
+        },
+        text: {
+          primary: "#f7f8f8",
+          secondary: "#d0d6e0",
+          muted: "#8a8f98",
+          subtle: "#62666d",
+        },
+        status: {
+          success: "#10b981",
+          warning: "#f59e0b",
+          danger: "#ef4444",
+          info: "#3b82f6",
+        },
+        // Keep slate as fallback
+        border: {
+          subtle: "rgba(255,255,255,0.05)",
+          DEFAULT: "rgba(255,255,255,0.08)",
+          active: "rgba(255,255,255,0.12)",
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "Fira Code", "monospace"],
+        sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       fontSize: {
-        "display": ["3.5rem", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700" }],
-        "heading-1": ["2.25rem", { lineHeight: "1.2", letterSpacing: "-0.02em", fontWeight: "700" }],
-        "heading-2": ["1.875rem", { lineHeight: "1.3", letterSpacing: "-0.01em", fontWeight: "600" }],
-        "heading-3": ["1.25rem", { lineHeight: "1.4", fontWeight: "600" }],
+        "display-hero": ["3.5rem", { lineHeight: "1.1", letterSpacing: "-0.035em", fontWeight: "300" }],
+        "display": ["3rem", { lineHeight: "1.1", letterSpacing: "-0.022em", fontWeight: "300" }],
+        "h1": ["2rem", { lineHeight: "1.2", letterSpacing: "-0.022em" }],
+        "h2": ["1.5rem", { lineHeight: "1.3", letterSpacing: "-0.012em" }],
+        "h3": ["1.25rem", { lineHeight: "1.4", letterSpacing: "-0.012em", fontWeight: "600" }],
+        "body-lg": ["1.125rem", { lineHeight: "1.6", fontWeight: "300" }],
       },
       borderRadius: {
-        "card": "12px",
-        "button": "8px",
-        "badge": "9999px",
-        "input": "8px",
-      },
-      boxShadow: {
-        "card": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
-        "card-hover": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
-        "elevated": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)",
-      },
-      animation: {
-        "fade-in": "fadeIn 0.5s ease-out",
-        "slide-up": "slideUp 0.5s ease-out",
-        "slide-down": "slideDown 0.3s ease-out",
-        "scale-in": "scaleIn 0.2s ease-out",
-        "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "button": "6px",
+        "card": "8px",
+        "panel": "12px",
       },
       keyframes: {
         fadeIn: {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        slideUp: {
-          "0%": { opacity: "0", transform: "translateY(16px)" },
+          "0%": { opacity: "0", transform: "translateY(8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        slideDown: {
-          "0%": { opacity: "0", transform: "translateY(-8px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
         },
-        scaleIn: {
-          "0%": { opacity: "0", transform: "scale(0.95)" },
-          "100%": { opacity: "1", transform: "scale(1)" },
+        pulseGlow: {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(94,106,210,0.4)" },
+          "50%": { boxShadow: "0 0 0 4px rgba(94,106,210,0)" },
         },
+      },
+      animation: {
+        "fade-in": "fadeIn 0.5s ease-out",
+        "shimmer": "shimmer 2s linear infinite",
+        "pulse-glow": "pulseGlow 2s ease-in-out infinite",
       },
     },
   },

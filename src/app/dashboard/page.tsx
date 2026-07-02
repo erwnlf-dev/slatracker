@@ -1,339 +1,466 @@
+// FILE: src/app/dashboard/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import {
-  ShieldCheck,
-  AlertTriangle,
-  Activity,
-  Clock,
-  TrendingUp,
-  TrendingDown,
-  ArrowUpRight,
-  ArrowDownRight,
-  Minus,
-  Download,
-  FilePlus,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  Search,
+import { useState, useMemo } from 'react';
+import { useStore } from '@/lib/store';
+import { SLAPolicy, Incident } from '@/lib/types';
+import { 
+  Plus, 
+  AlertTriangle, 
+  CheckCircle, 
+  Clock, 
+  Activity as ActivityIcon, 
+  ShieldAlert, 
+  X 
 } from 'lucide-react';
 
-// -- Sparkline component (6-point inline SVG) --
-function Sparkline({ points, color = '#5e6ad2' }: { points: number[]; color?: string }) {
-  const w = 48;
-  const h = 20;
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const coords = points
-    .map((v, i) => `${(i / (points.length - 1)) * w},${h - ((v - min) / range) * h}`)
-    .join(' ');
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none">
-      <polyline points={coords} stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-// -- 30-day compliance chart data --
-const complianceData = [
-  98.1, 98.4, 98.2, 98.9, 99.0, 98.7, 98.5, 99.1, 99.3, 99.0,
-  98.8, 99.2, 99.1, 99.4, 99.2, 98.9, 99.3, 99.5, 99.1, 99.0,
-  99.2, 99.4, 99.3, 99.1, 99.2, 99.5, 99.3, 99.2, 99.4, 99.2,
-];
-
-// -- Stat cards --
-const stats: Array<{
-  label: string;
-  value: string;
-  trend: string;
-  trendDir: 'up' | 'down' | 'flat';
-  trendText: string;
-  icon: React.ReactNode;
-  spark: number[];
-  sparkColor: string;
-  amber?: boolean;
-}> = [
-  {
-    label: 'Active SLAs',
-    value: '7',
-    trend: '+2',
-    trendDir: 'up' as const,
-    trendText: 'from last week',
-    icon: <ShieldCheck size={16} />,
-    spark: [3, 4, 4, 5, 5, 6, 7],
-    sparkColor: '#5e6ad2',
-  },
-  {
-    label: 'Compliance Rate',
-    value: '99.2%',
-    trend: '+0.4%',
-    trendDir: 'up' as const,
-    trendText: 'vs last period',
-    icon: <Activity size={16} />,
-    spark: [98.1, 98.5, 98.9, 99.0, 98.8, 99.1, 99.2],
-    sparkColor: '#34d399',
-  },
-  {
-    label: 'Breaches Today',
-    value: '0',
-    trend: '0',
-    trendDir: 'flat' as const,
-    trendText: 'no change',
-    icon: <AlertTriangle size={16} />,
-    spark: [1, 0, 0, 0, 0, 0, 0],
-    sparkColor: '#34d399',
-  },
-  {
-    label: 'At Risk',
-    value: '2',
-    trend: '+1',
-    trendDir: 'up' as const,
-    trendText: 'needs attention',
-    icon: <Clock size={16} />,
-    spark: [0, 1, 1, 0, 1, 1, 2],
-    sparkColor: '#f59e0b',
-    amber: true,
-  },
-];
-
-// -- Incidents --
-type Incident = {
-  time: string;
-  sla: string;
-  status: 'compliant' | 'at_risk' | 'breached' | 'pending';
-  responseTime: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-};
-
-const incidents: Incident[] = [
-  { time: '14:32', sla: 'Payment Gateway Latency', status: 'compliant', responseTime: '142ms', severity: 'low' },
-  { time: '14:18', sla: 'Auth Service Uptime', status: 'at_risk', responseTime: '1.8s', severity: 'medium' },
-  { time: '13:55', sla: 'Email Delivery SLA', status: 'compliant', responseTime: '890ms', severity: 'low' },
-  { time: '13:21', sla: 'CDN Cache Hit Rate', status: 'compliant', responseTime: '38ms', severity: 'low' },
-  { time: '12:47', sla: 'Database Read Latency', status: 'at_risk', responseTime: '2.1s', severity: 'high' },
-  { time: '11:03', sla: 'Search Indexing Pipeline', status: 'pending', responseTime: '—', severity: 'medium' },
-  { time: '10:29', sla: 'Webhook Delivery Rate', status: 'compliant', responseTime: '210ms', severity: 'low' },
-  { time: '09:15', sla: 'API Gateway Throughput', status: 'compliant', responseTime: '95ms', severity: 'low' },
-];
-
-const statusMap: Record<Incident['status'], { label: string; cls: string }> = {
-  compliant: { label: 'Compliant', cls: 'bg-[#0d2818] text-emerald-400 border border-emerald-500/20' },
-  at_risk: { label: 'At Risk', cls: 'bg-[#2a1f0d] text-amber-400 border border-amber-500/20' },
-  breached: { label: 'Breached', cls: 'bg-[#2a0d0d] text-red-400 border border-red-500/20' },
-  pending: { label: 'Pending', cls: 'bg-[#1a1a1e] text-[#8a8f98] border border-[rgba(255,255,255,0.08)]' },
-};
-
-const severityMap: Record<Incident['severity'], { cls: string }> = {
-  low: { cls: 'text-[#8a8f98]' },
-  medium: { cls: 'text-amber-400' },
-  high: { cls: 'text-orange-400' },
-  critical: { cls: 'text-red-400' },
-};
-
-// -- SVG compliance chart --
-function ComplianceChart() {
-  const w = 680;
-  const h = 180;
-  const pad = { top: 12, right: 12, bottom: 24, left: 36 };
-  const cw = w - pad.left - pad.right;
-  const ch = h - pad.top - pad.bottom;
-  const min = 97.5;
-  const max = 100;
-  const range = max - min;
-
-  const pts = complianceData.map((v, i) => ({
-    x: pad.left + (i / (complianceData.length - 1)) * cw,
-    y: pad.top + ch - ((v - min) / range) * ch,
-  }));
-
-  const line = pts.map((p, i) => {
-    if (i === 0) return `M ${p.x},${p.y}`;
-    const prev = pts[i - 1];
-    const cpx1 = prev.x + (p.x - prev.x) * 0.4;
-    const cpx2 = p.x - (p.x - prev.x) * 0.4;
-    return `C ${cpx1},${prev.y} ${cpx2},${p.y} ${p.x},${p.y}`;
-  }).join(' ');
-
-  const areaPath = `${line} L ${pts[pts.length - 1].x},${pad.top + ch} L ${pts[0].x},${pad.top + ch} Z`;
-
-  const gridLines = [98, 98.5, 99, 99.5, 100];
-
-  return (
-    <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-[#f7f8f8]">Compliance Trend</h3>
-        <span className="text-xs text-[#8a8f98]">Last 30 days</span>
-      </div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 180 }}>
-        <defs>
-          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#34d399" stopOpacity="0.15" />
-            <stop offset="100%" stopColor="#34d399" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {/* grid */}
-        {gridLines.map((v) => {
-          const y = pad.top + ch - ((v - min) / range) * ch;
-          return (
-            <g key={v}>
-              <line x1={pad.left} y1={y} x2={w - pad.right} y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-              <text x={pad.left - 6} y={y + 3} textAnchor="end" fill="#8a8f98" fontSize="10" fontFamily="Inter, system-ui">{v}%</text>
-            </g>
-          );
-        })}
-        {/* x labels */}
-        {['Jun 1', 'Jun 10', 'Jun 20', 'Jun 30'].map((lbl, i) => {
-          const x = pad.left + (i / 3) * cw;
-          return <text key={lbl} x={x} y={h - 4} textAnchor="middle" fill="#8a8f98" fontSize="10" fontFamily="Inter, system-ui">{lbl}</text>;
-        })}
-        {/* area fill */}
-        <path d={areaPath} fill="url(#chartGrad)" />
-        {/* line */}
-        <path d={line} fill="none" stroke="#34d399" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        {/* end dot */}
-        <circle cx={pts[pts.length - 1].x} cy={pts[pts.length - 1].y} r="3" fill="#34d399" />
-      </svg>
-    </div>
-  );
-}
-
-// -- Sort keys --
-type SortKey = 'time' | 'sla' | 'status' | 'responseTime' | 'severity';
-
 export default function DashboardPage() {
-  const [sortKey, setSortKey] = useState<SortKey>('time');
-  const [sortAsc, setSortAsc] = useState(false);
-  const [hoveredRow, setHoveredRow] = useState<number | null>(null);
+  const { state, dispatch } = useStore();
+  const [isIncidentModalOpen, setIsIncidentModalOpen] = useState(false);
+  const [isPolicyModalOpen, setIsPolicyModalOpen] = useState(false);
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else { setSortKey(key); setSortAsc(true); }
+  // Form states
+  const [incidentForm, setIncidentForm] = useState({ title: '', severity: 'major' as Incident['severity'], policyId: '' });
+  const [policyForm, setPolicyForm] = useState({ name: '', targetUptime: 99.9, responseTimeTarget: 30, resolutionTimeTarget: 120 });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Calculations
+  const activePolicies = useMemo(() => state.policies.filter(p => p.status === 'active'), [state.policies]);
+  const activeIncidents = useMemo(() => state.incidents.filter(i => i.status !== 'resolved' && i.status !== 'closed'), [state.incidents]);
+  
+  const policyComplianceMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    state.policies.forEach(p => {
+      const policyIncidents = state.incidents.filter(i => i.policyId === p.id);
+      let deduction = 0;
+      policyIncidents.forEach(inc => {
+        if (inc.status !== 'resolved' && inc.status !== 'closed') {
+          if (inc.severity === 'critical') deduction += 1.5;
+          if (inc.severity === 'major') deduction += 0.5;
+          if (inc.severity === 'minor') deduction += 0.1;
+        }
+      });
+      map[p.id] = Math.max(0, Math.min(100, Number((100 - deduction).toFixed(2))));
+    });
+    return map;
+  }, [state.policies, state.incidents]);
+
+  const overallCompliance = useMemo(() => {
+    if (activePolicies.length === 0) return 100;
+    const sum = activePolicies.reduce((acc, p) => acc + (policyComplianceMap[p.id] ?? 100), 0);
+    return Number((sum / activePolicies.length).toFixed(2));
+  }, [activePolicies, policyComplianceMap]);
+
+  const avgResolutionTime = useMemo(() => {
+    const resolved = state.incidents.filter(i => i.status === 'resolved' || i.status === 'closed');
+    if (!resolved.length) return 0;
+    const total = resolved.reduce((acc, curr) => {
+      const end = curr.statusHistory.find(h => h.status === 'resolved' || h.status === 'closed')?.at || curr.updatedAt;
+      return acc + (end - curr.createdAt);
+    }, 0);
+    return Math.round(total / resolved.length / 60000); // minutes
+  }, [state.incidents]);
+
+  const severityCounts = useMemo(() => {
+    const counts = { critical: 0, major: 0, minor: 0 };
+    activeIncidents.forEach(i => {
+      if (i.severity in counts) counts[i.severity]++;
+    });
+    return counts;
+  }, [activeIncidents]);
+
+  const recentActivities = useMemo(() => {
+    return [...state.activities].sort((a, b) => b.timestamp - a.timestamp).slice(0, 5);
+  }, [state.activities]);
+
+  // Actions
+  const handleCreateIncident = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!incidentForm.title.trim()) return setErrors({ title: 'Title is required' });
+    if (!incidentForm.policyId) return setErrors({ policyId: 'Policy is required' });
+
+    const newIncident: Incident = {
+      id: crypto.randomUUID(),
+      title: incidentForm.title,
+      severity: incidentForm.severity,
+      policyId: incidentForm.policyId,
+      status: 'open',
+      statusHistory: [{ status: 'open', at: Date.now() }],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    dispatch({ type: 'ADD_ENTITY', payload: { type: 'incidents', data: newIncident } });
+    dispatch({
+      type: 'TOAST',
+      payload: { message: `Incident "${newIncident.title}" logged successfully`, type: 'success' }
+    });
+    
+    setIsIncidentModalOpen(false);
+    setIncidentForm({ title: '', severity: 'major', policyId: '' });
+    setErrors({});
   };
 
-  const sorted = [...incidents].sort((a, b) => {
-    const av = a[sortKey];
-    const bv = b[sortKey];
-    const cmp = String(av).localeCompare(String(bv));
-    return sortAsc ? cmp : -cmp;
-  });
+  const handleCreatePolicy = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!policyForm.name.trim()) return setErrors({ name: 'Name is required' });
 
-  const SortIcon = ({ col }: { col: SortKey }) => {
-    if (sortKey !== col) return <ChevronDown size={12} className="opacity-30" />;
-    return sortAsc ? <ChevronUp size={12} className="text-[#5e6ad2]" /> : <ChevronDown size={12} className="text-[#5e6ad2]" />;
+    const newPolicy: SLAPolicy = {
+      id: crypto.randomUUID(),
+      name: policyForm.name,
+      targetUptime: Number(policyForm.targetUptime),
+      responseTimeTarget: Number(policyForm.responseTimeTarget),
+      resolutionTimeTarget: Number(policyForm.resolutionTimeTarget),
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    dispatch({ type: 'ADD_ENTITY', payload: { type: 'policies', data: newPolicy } });
+    dispatch({
+      type: 'TOAST',
+      payload: { message: `SLA Policy "${newPolicy.name}" created`, type: 'success' }
+    });
+
+    setIsPolicyModalOpen(false);
+    setPolicyForm({ name: '', targetUptime: 99.9, responseTimeTarget: 30, resolutionTimeTarget: 120 });
+    setErrors({});
   };
 
   return (
-    <div className="space-y-4">
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        {stats.map((s) => (
-          <div
-            key={s.label}
-            className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] px-4 py-3 flex flex-col justify-between transition-all duration-150 hover:border-[rgba(255,255,255,0.1)]"
-            style={{ minHeight: 100 }}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[#f7f8f8]">Dashboard</h1>
+          <p className="text-sm text-[#8a8f98]">Real-time SLA compliance and incident tracking.</p>
+        </div>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => setIsPolicyModalOpen(true)}
+            className="rounded-md border border-[rgba(255,255,255,0.08)] px-4 py-2 text-sm text-[#d0d6e0] hover:bg-[#191a1b]"
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-[#8a8f98] font-medium tracking-wide uppercase">{s.label}</span>
-              <span className={`${s.amber ? 'text-amber-400' : 'text-[#8a8f98]'}`}>{s.icon}</span>
-            </div>
-            <div className="flex items-end justify-between">
-              <span className="text-2xl font-semibold text-[#f7f8f8] tracking-tight">{s.value}</span>
-              <Sparkline points={s.spark} color={s.sparkColor} />
-            </div>
-            <div className="flex items-center gap-1 mt-2">
-              {s.trendDir === 'up' && <ArrowUpRight size={12} className={s.amber ? 'text-amber-400' : 'text-emerald-400'} />}
-              {s.trendDir === 'down' && <ArrowDownRight size={12} className="text-red-400" />}
-              {s.trendDir === 'flat' && <Minus size={12} className="text-[#8a8f98]" />}
-              <span className={`text-xs ${s.amber ? 'text-amber-400' : s.trendDir === 'flat' ? 'text-[#8a8f98]' : 'text-emerald-400'}`}>
-                {s.trend}
-              </span>
-              <span className="text-xs text-[#8a8f98]">{s.trendText}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Chart + Quick Actions row */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-        <div className="lg:col-span-3">
-          <ComplianceChart />
-        </div>
-        <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] p-4 flex flex-col gap-2">
-          <h3 className="text-sm font-medium text-[#f7f8f8] mb-1">Quick Actions</h3>
-          <button className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[#d0d6e0] border border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.04)] hover:border-[rgba(255,255,255,0.12)] transition-all duration-150">
-            <FilePlus size={14} className="text-[#5e6ad2]" />
-            New SLA
+            New Policy
           </button>
-          <button className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[#d0d6e0] border border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.04)] hover:border-[rgba(255,255,255,0.12)] transition-all duration-150">
-            <FileText size={14} className="text-[#5e6ad2]" />
-            Run Report
-          </button>
-          <button className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-[#d0d6e0] border border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.04)] hover:border-[rgba(255,255,255,0.12)] transition-all duration-150">
-            <Download size={14} className="text-[#5e6ad2]" />
-            Export CSV
+          <button 
+            onClick={() => setIsIncidentModalOpen(true)}
+            className="flex items-center gap-2 rounded-md bg-[#5e6ad2] px-4 py-2 text-sm font-medium text-white hover:bg-[#828fff]"
+          >
+            <Plus className="h-4 w-4" /> Log Incident
           </button>
         </div>
       </div>
 
-      {/* Incidents table */}
-      <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[rgba(255,255,255,0.02)] overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(255,255,255,0.05)]">
-          <h3 className="text-sm font-medium text-[#f7f8f8]">Recent Incidents</h3>
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8a8f98]" />
-            <input
-              type="text"
-              placeholder="Filter incidents..."
-              className="w-48 rounded-md border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] pl-8 pr-10 py-1.5 text-xs text-[#d0d6e0] placeholder:text-[#8a8f98] focus:outline-none focus:border-[rgba(255,255,255,0.15)] transition-all duration-150"
-            />
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 rounded border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.04)] px-1.5 py-0.5 text-[10px] text-[#8a8f98] font-mono">⌘K</kbd>
+      {/* Stats Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[#0f1011] p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-[#8a8f98]">Overall Compliance</span>
+            <CheckCircle className={`h-5 w-5 ${overallCompliance >= 99.9 ? 'text-[#10b981]' : 'text-[#f59e0b]'}`} />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-semibold text-[#f7f8f8]">{overallCompliance}%</span>
+          </div>
+          <p className="mt-1 text-xs text-[#62666d]">Target: 99.9% average</p>
+        </div>
+
+        <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[#0f1011] p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-[#8a8f98]">Active Incidents</span>
+            <ShieldAlert className={`h-5 w-5 ${activeIncidents.length > 0 ? 'text-[#ef4444]' : 'text-[#8a8f98]'}`} />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-semibold text-[#f7f8f8]">{activeIncidents.length}</span>
+          </div>
+          <p className="mt-1 text-xs text-[#62666d]">Requires immediate attention</p>
+        </div>
+
+        <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[#0f1011] p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-[#8a8f98]">Active Policies</span>
+            <Clock className="h-5 w-5 text-[#3b82f6]" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-semibold text-[#f7f8f8]">{activePolicies.length}</span>
+          </div>
+          <p className="mt-1 text-xs text-[#62666d]">Monitored SLA targets</p>
+        </div>
+
+        <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[#0f1011] p-5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-[#8a8f98]">Avg Resolution Time</span>
+            <Clock className="h-5 w-5 text-[#10b981]" />
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-3xl font-semibold text-[#f7f8f8]">{avgResolutionTime}m</span>
+          </div>
+          <p className="mt-1 text-xs text-[#62666d]">Based on resolved incidents</p>
+        </div>
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Compliance Bar Chart */}
+        <div className="lg:col-span-2 rounded-lg border border-[rgba(255,255,255,0.05)] bg-[#0f1011] p-5">
+          <h3 className="text-lg font-medium text-[#f7f8f8] mb-4">Policy Compliance</h3>
+          <div className="space-y-4">
+            {state.policies.length === 0 ? (
+              <p className="text-sm text-[#8a8f98] py-4 text-center">No policies defined yet.</p>
+            ) : (
+              state.policies.map(policy => {
+                const compliance = policyComplianceMap[policy.id] ?? 100;
+                const isViolated = compliance < policy.targetUptime;
+                return (
+                  <div key={policy.id} className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="font-medium text-[#d0d6e0]">{policy.name}</span>
+                      <span className={`font-semibold ${isViolated ? 'text-[#ef4444]' : 'text-[#10b981]'}`}>
+                        {compliance}% <span className="text-xs text-[#8a8f98] font-normal">/ {policy.targetUptime}%</span>
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-[#191a1b] rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${isViolated ? 'bg-[#ef4444]' : 'bg-[#10b981]'}`}
+                        style={{ width: `${compliance}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[rgba(255,255,255,0.05)]">
-                {([['time', 'Time'], ['sla', 'SLA Name'], ['status', 'Status'], ['responseTime', 'Response Time'], ['severity', 'Severity']] as [SortKey, string][]).map(([key, label]) => (
-                  <th
-                    key={key}
-                    onClick={() => handleSort(key)}
-                    className="px-4 py-2.5 text-left text-xs font-medium text-[#8a8f98] uppercase tracking-wider cursor-pointer select-none hover:text-[#d0d6e0] transition-colors duration-150"
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {label}
-                      <SortIcon col={key} />
-                    </span>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((inc, i) => (
-                <tr
-                  key={i}
-                  onMouseEnter={() => setHoveredRow(i)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                  className={`border-b border-[rgba(255,255,255,0.03)] transition-all duration-150 ${
-                    hoveredRow === i ? 'bg-[rgba(255,255,255,0.04)]' : i % 2 === 0 ? 'bg-transparent' : 'bg-[rgba(255,255,255,0.015)]'
-                  }`}
+
+        {/* Severity Breakdown */}
+        <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[#0f1011] p-5 flex flex-col justify-between">
+          <div>
+            <h3 className="text-lg font-medium text-[#f7f8f8] mb-4">Active Incidents by Severity</h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-2 rounded bg-[#191a1b]/50">
+                <div className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-[#ef4444]" />
+                  <span className="text-sm text-[#d0d6e0]">Critical</span>
+                </div>
+                <span className="text-sm font-semibold text-[#f7f8f8]">{severityCounts.critical}</span>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded bg-[#191a1b]/50">
+                <div className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-[#f59e0b]" />
+                  <span className="text-sm text-[#d0d6e0]">Major</span>
+                </div>
+                <span className="text-sm font-semibold text-[#f7f8f8]">{severityCounts.major}</span>
+              </div>
+              <div className="flex items-center justify-between p-2 rounded bg-[#191a1b]/50">
+                <div className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full bg-[#3b82f6]" />
+                  <span className="text-sm text-[#d0d6e0]">Minor</span>
+                </div>
+                <span className="text-sm font-semibold text-[#f7f8f8]">{severityCounts.minor}</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 pt-4 border-t border-[rgba(255,255,255,0.05)] text-xs text-[#8a8f98] flex items-center gap-1">
+            <AlertTriangle className="h-3.5 w-3.5 text-[#f59e0b]" />
+            Unresolved incidents degrade compliance metrics.
+          </div>
+        </div>
+      </div>
+
+      {/* Activity Feed */}
+      <div className="rounded-lg border border-[rgba(255,255,255,0.05)] bg-[#0f1011] p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <ActivityIcon className="h-5 w-5 text-[#5e6ad2]" />
+          <h3 className="text-lg font-medium text-[#f7f8f8]">Recent Activity</h3>
+        </div>
+        <div className="flow-root">
+          <ul className="-mb-8">
+            {recentActivities.length === 0 ? (
+              <p className="text-sm text-[#8a8f98] py-4 text-center">No recent activity recorded.</p>
+            ) : (
+              recentActivities.map((activity, idx) => (
+                <li key={activity.id}>
+                  <div className="relative pb-8">
+                    {idx !== recentActivities.length - 1 && (
+                      <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-[rgba(255,255,255,0.05)]" aria-hidden="true" />
+                    )}
+                    <div className="relative flex space-x-3">
+                      <div>
+                        <span className="h-8 w-8 rounded-full bg-[#191a1b] flex items-center justify-center ring-8 ring-[#0f1011]">
+                          <ActivityIcon className="h-4 w-4 text-[#8a8f98]" />
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0 pt-1.5 flex justify-between space-x-4">
+                        <div>
+                          <p className="text-sm text-[#d0d6e0]">
+                            {activity.entityType === 'incident' ? 'Incident' : 'Policy'}{' '}
+                            <span className="font-medium text-[#f7f8f8]">"{activity.entityName}"</span>{' '}
+                            {activity.action.replace('_', ' ')}
+                            {activity.detail && <span className="text-[#8a8f98]"> ({activity.detail})</span>}
+                          </p>
+                        </div>
+                        <div className="text-right text-xs whitespace-nowrap text-[#62666d]">
+                          {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      </div>
+
+      {/* Log Incident Modal */}
+      {isIncidentModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#191a1b] p-6 relative">
+            <button 
+              onClick={() => setIsIncidentModalOpen(false)}
+              className="absolute top-4 right-4 text-[#8a8f98] hover:text-[#f7f8f8]"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="text-xl font-semibold text-[#f7f8f8] mb-4">Log New Incident</h2>
+            <form onSubmit={handleCreateIncident} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#8a8f98] uppercase mb-1">Incident Title</label>
+                <input 
+                  type="text"
+                  value={incidentForm.title}
+                  onChange={e => setIncidentForm({ ...incidentForm, title: e.target.value })}
+                  placeholder="e.g. API Gateway Timeout"
+                  className="w-full rounded-md border border-[rgba(255,255,255,0.08)] bg-[#191a1b] px-3 py-2 text-sm text-[#f7f8f8] focus:border-[#5e6ad2] focus:outline-none"
+                />
+                {errors.title && <p className="mt-1 text-xs text-[#ef4444]">{errors.title}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#8a8f98] uppercase mb-1">Severity</label>
+                <select
+                  value={incidentForm.severity}
+                  onChange={e => setIncidentForm({ ...incidentForm, severity: e.target.value as Incident['severity'] })}
+                  className="w-full rounded-md border border-[rgba(255,255,255,0.08)] bg-[#191a1b] px-3 py-2 text-sm text-[#f7f8f8] focus:border-[#5e6ad2] focus:outline-none"
                 >
-                  <td className="px-4 py-2.5 text-sm text-[#8a8f98] font-mono tabular-nums">{inc.time}</td>
-                  <td className="px-4 py-2.5 text-sm text-[#d0d6e0]">{inc.sla}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${statusMap[inc.status].cls}`}>
-                      {statusMap[inc.status].label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-sm text-[#d0d6e0] font-mono tabular-nums">{inc.responseTime}</td>
-                  <td className={`px-4 py-2.5 text-sm capitalize ${severityMap[inc.severity].cls}`}>{inc.severity}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <option value="critical">Critical (Complete Outage)</option>
+                  <option value="major">Major (Performance Degradation)</option>
+                  <option value="minor">Minor (Partial Issue)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[#8a8f98] uppercase mb-1">Linked SLA Policy</label>
+                <select
+                  value={incidentForm.policyId}
+                  onChange={e => setIncidentForm({ ...incidentForm, policyId: e.target.value })}
+                  className="w-full rounded-md border border-[rgba(255,255,255,0.08)] bg-[#191a1b] px-3 py-2 text-sm text-[#f7f8f8] focus:border-[#5e6ad2] focus:outline-none"
+                >
+                  <option value="">Select a policy...</option>
+                  {state.policies.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {errors.policyId && <p className="mt-1 text-xs text-[#ef4444]">{errors.policyId}</p>}
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setIsIncidentModalOpen(false)}
+                  className="rounded-md border border-[rgba(255,255,255,0.08)] px-4 py-2 text-sm text-[#d0d6e0] hover:bg-[#191a1b]"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="rounded-md bg-[#5e6ad2] px-4 py-2 text-sm font-medium text-white hover:bg-[#828fff]"
+                >
+                  Log Incident
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Create Policy Modal */}
+      {isPolicyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-[rgba(255,255,255,0.08)] bg-[#191a1b] p-6 relative">
+            <button 
+              onClick={() => setIsPolicyModalOpen(false)}
+              className="absolute top-4 right-4 text-[#8a8f98] hover:text-[#f7f8f8]"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="text-xl font-semibold text-[#f7f8f8] mb-4">Create SLA Policy</h2>
+            <form onSubmit={handleCreatePolicy} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-[#8a8f98] uppercase mb-1">Policy Name</label>
+                <input 
+                  type="text"
+                  value={policyForm.name}
+                  onChange={e => setPolicyForm({ ...policyForm, name: e.target.value })}
+                  placeholder="e.g. Core API Uptime"
+                  className="w-full rounded-md border border-[rgba(255,255,255,0.08)] bg-[#191a1b] px-3 py-2 text-sm text-[#f7f8f8] focus:border-[#5e6ad2] focus:outline-none"
+                />
+                {errors.name && <p className="mt-1 text-xs text-[#ef4444]">{errors.name}</p>}
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-[#8a8f98] uppercase mb-1">Target Uptime (%)</label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={policyForm.targetUptime}
+                    onChange={e => setPolicyForm({ ...policyForm, targetUptime: parseFloat(e.target.value) || 0 })}
+                    className="w-full rounded-md border border-[rgba(255,255,255,0.08)] bg-[#191a1b] px-3 py-2 text-sm text-[#f7f8f8] focus:border-[#5e6ad2] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#8a8f98] uppercase mb-1">Response (min)</label>
+                  <input 
+                    type="number"
+                    min="1"
+                    value={policyForm.responseTimeTarget}
+                    onChange={e => setPolicyForm({ ...policyForm, responseTimeTarget: parseInt(e.target.value) || 0 })}
+                    className="w-full rounded-md border border-[rgba(255,255,255,0.08)] bg-[#191a1b] px-3 py-2 text-sm text-[#f7f8f8] focus:border-[#5e6ad2] focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#8a8f98] uppercase mb-1">Resolution (min)</label>
+                  <input 
+                    type="number"
+                    min="1"
+                    value={policyForm.resolutionTimeTarget}
+                    onChange={e => setPolicyForm({ ...policyForm, resolutionTimeTarget: parseInt(e.target.value) || 0 })}
+                    className="w-full rounded-md border border-[rgba(255,255,255,0.08)] bg-[#191a1b] px-3 py-2 text-sm text-[#f7f8f8] focus:border-[#5e6ad2] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <button 
+                  type="button"
+                  onClick={() => setIsPolicyModalOpen(false)}
+                  className="rounded-md border border-[rgba(255,255,255,0.08)] px-4 py-2 text-sm text-[#d0d6e0] hover:bg-[#191a1b]"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="rounded-md bg-[#5e6ad2] px-4 py-2 text-sm font-medium text-white hover:bg-[#828fff]"
+                >
+                  Create Policy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
